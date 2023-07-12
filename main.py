@@ -11,6 +11,14 @@ from panda3d.core import DirectionalLight
 
 from panda3d.core import Vec4, Vec3
 
+from panda3d.core import CollisionTraverser
+from panda3d.core import CollisionHandlerPusher
+from panda3d.core import CollisionSphere, CollisionNode
+from panda3d.core import CollisionTube
+
+from models.p3d_samples.utilities.hdri_to_cubemap.hdri_to_cubemap import base
+
+
 class Game(ShowBase):
 
     def __init__(self):
@@ -35,12 +43,14 @@ class Game(ShowBase):
         self.environment.reparentTo(self.render)
 
         # Creating a Panda Chan actor
-        self.tempActor = Actor("models/p3d_samples/models/act_p3d_chan", {"walk": "models/p3d_samples/models/a_p3d_chan_run"})
+        self.tempActor = Actor("models/p3d_samples/models/act_p3d_chan",
+                               {"walk": "models/p3d_samples/models/a_p3d_chan_run"})
         self.tempActor.reparentTo(self.render)
         # # Setting Panda Chan's position in front of the camera
         # self.tempActor.setPos(0, 7, 0)
 
-        # Rotating the child node of Panda Chan (models aren’t usually loaded as single nodes, but rather tend to have at least one child-node containing the models themselves) on z-axis using the setH function
+        # Rotating the child node of Panda Chan (models aren’t usually loaded as single nodes,
+        # but rather tend to have at least one child-node containing the models themselves) on z-axis using the setH function
         self.tempActor.getChild(0).setH(180)
 
         # Making Panda Chan walk
@@ -68,43 +78,95 @@ class Game(ShowBase):
         self.render.setShaderAuto()
 
         # Method that accepts a task and returns a "looping task"....? I don't know how to frame it
-        def update(task):
-            # Get the amount of time since the last update
-            dt = globalClock.getDt()
+    def update(task):
+        # Get the amount of time since the last update
+        dt = globalClock.getDt()
 
-            # If any movement keys are pressed, use the above time
-            # to calculate how far to move the character, and apply that.
-            if self.keyMap["up"]:
-                self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, 5.0 * dt, 0))
-            if self.keyMap["down"]:
-                self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, -5.0 * dt, 0))
-            if self.keyMap["left"]:
-                self.tempActor.setPos(self.tempActor.getPos() + Vec3(-5.0 * dt, 0, 0))
-            if self.keyMap["right"]:
-                self.tempActor.setPos(self.tempActor.getPos() + Vec3(5.0 * dt, 0, 0))
-            if self.keyMap["shoot"]:
-                print("Zap!")
-            return task.cont
+        # If any movement keys are pressed, use the above time
+        # to calculate how far to move the character, and apply that.
+        if task.keyMap["up"]:
+            task.tempActor.setPos(task.tempActor.getPos() + Vec3(0, 5.0 * dt, 0))
+        if task.keyMap["down"]:
+            task.tempActor.setPos(task.tempActor.getPos() + Vec3(0, -5.0 * dt, 0))
+        if task.keyMap["left"]:
+            task.tempActor.setPos(task.tempActor.getPos() + Vec3(-5.0 * dt, 0, 0))
+        if task.keyMap["right"]:
+            task.tempActor.setPos(task.tempActor.getPos() + Vec3(5.0 * dt, 0, 0))
+        if task.keyMap["shoot"]:
+            print("Zap!")
+        return task.cont
 
         # Adding task to task manager
         self.updateTask = taskMgr.add(update, "update")
 
         # updating the state of the game with key press and release
-        def updateKeyMap(self, controlName, controlState):
-            self.keyMap[controlName] = controlState
-            print(controlName, "set to", controlState)
+    def updateKeyMap(self, controlName, controlState):
+        self.keyMap[controlName] = controlState
+        print(controlName, "set to", controlState)
 
+        self.accept("w", self.updateKeyMap, ["up", True])
+        self.accept("w-up", self.updateKeyMap, ["up", False])
+        self.accept("s", self.updateKeyMap, ["down", True])
+        self.accept("s-up", self.updateKeyMap, ["down", False])
+        self.accept("a", self.updateKeyMap, ["left", True])
+        self.accept("a-up", self.updateKeyMap, ["left", False])
+        self.accept("d", self.updateKeyMap, ["right", True])
+        self.accept("d-up", self.updateKeyMap, ["right", False])
+        self.accept("mouse1", self.updateKeyMap, ["shoot", True])
+        self.accept("mouse1-up", self.updateKeyMap, ["shoot", False])
 
-        self.accept("w", updateKeyMap, [self,"up", True])
-        self.accept("w-up", updateKeyMap, [self,"up", False])
-        self.accept("s", updateKeyMap, [self,"down", True])
-        self.accept("s-up", updateKeyMap, [self,"down", False])
-        self.accept("a", updateKeyMap, [self,"left", True])
-        self.accept("a-up", updateKeyMap, [self,"left", False])
-        self.accept("d", updateKeyMap, [self,"right", True])
-        self.accept("d-up", updateKeyMap, [self,"right", False])
-        self.accept("mouse1", updateKeyMap, [self,"shoot", True])
-        self.accept("mouse1-up", updateKeyMap, [self,"shoot", False])
+        self.cTrav = CollisionTraverser()
+        # Panda should now automatically update that traverser!
+
+        # prevents nominated solid objects from intersecting other solid objects.
+        # We’ll store our reference to it, because we want to be able to add and remove objects as called for.
+        self.pusher = CollisionHandlerPusher()
+
+        # Creating a collision-object
+        colliderNode = CollisionNode("player")
+        # Add a collision-sphere centred on (0, 0, 0), and with a radius of 0.3
+        colliderNode.addSolid(CollisionSphere(0, 0, 0, 0.3))
+        collider = self.tempActor.attachNewNode(colliderNode)
+        collider.show()
+
+        # The pusher wants a collider, and a NodePath that
+        # should be moved by that collider's collisions.
+        # In this case, we want our player-Actor to be moved.
+        base.pusher.addCollider(collider, self.tempActor)
+        # The traverser wants a collider, and a handler
+        # that responds to that collider's collisions
+        base.cTrav.addCollider(collider, self.pusher)
+
+        # Allows pusher's responses to be restricted to the horizontal (not 3D because we're playing on a flat surface)
+        self.pusher.setHorizontal(True)
+
+        # Tubes are defined by their start-points, end-points, and radius.
+        # In this first case, the tube goes from (-8, 0, 0) to (8, 0, 0),
+        # and has a radius of 0.2.
+        wallSolid = CollisionTube(-8.0, 0, 0, 8.0, 0, 0, 0.2)
+        wallNode = CollisionNode("wall")
+        wallNode.addSolid(wallSolid)
+        wall = self.render.attachNewNode(wallNode)
+        wall.setY(8.0)
+
+        wallSolid = CollisionTube(-8.0, 0, 0, 8.0, 0, 0, 0.2)
+        wallNode = CollisionNode("wall")
+        wallNode.addSolid(wallSolid)
+        wall = self.render.attachNewNode(wallNode)
+        wall.setY(-8.0)
+
+        wallSolid = CollisionTube(0, -8.0, 0, 0, 8.0, 0, 0.2)
+        wallNode = CollisionNode("wall")
+        wallNode.addSolid(wallSolid)
+        wall = self.render.attachNewNode(wallNode)
+        wall.setX(8.0)
+
+        wallSolid = CollisionTube(0, -8.0, 0, 0, 8.0, 0, 0.2)
+        wallNode = CollisionNode("wall")
+        wallNode.addSolid(wallSolid)
+        wall = self.render.attachNewNode(wallNode)
+        wall.setX(-8.0)
+
 
 game = Game()
 game.run()
