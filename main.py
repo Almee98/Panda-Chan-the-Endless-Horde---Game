@@ -16,8 +16,6 @@ from panda3d.core import CollisionHandlerPusher
 from panda3d.core import CollisionSphere, CollisionNode
 from panda3d.core import CollisionTube
 
-from models.p3d_samples.utilities.hdri_to_cubemap.hdri_to_cubemap import base
-
 
 class Game(ShowBase):
 
@@ -43,8 +41,8 @@ class Game(ShowBase):
         self.environment.reparentTo(self.render)
 
         # Creating a Panda Chan actor
-        self.tempActor = Actor("models/p3d_samples/models/act_p3d_chan",
-                               {"walk": "models/p3d_samples/models/a_p3d_chan_run"})
+        self.tempActor = Actor("models/panda_chan/act_p3d_chan",
+                               {"walk": "models/panda_chan/a_p3d_chan_run"})
         self.tempActor.reparentTo(self.render)
         # # Setting Panda Chan's position in front of the camera
         # self.tempActor.setPos(0, 7, 0)
@@ -77,33 +75,6 @@ class Game(ShowBase):
         # setting the shading to give more depth to the scene
         self.render.setShaderAuto()
 
-        # Method that accepts a task and returns a "looping task"....? I don't know how to frame it
-    def update(task):
-        # Get the amount of time since the last update
-        dt = globalClock.getDt()
-
-        # If any movement keys are pressed, use the above time
-        # to calculate how far to move the character, and apply that.
-        if task.keyMap["up"]:
-            task.tempActor.setPos(task.tempActor.getPos() + Vec3(0, 5.0 * dt, 0))
-        if task.keyMap["down"]:
-            task.tempActor.setPos(task.tempActor.getPos() + Vec3(0, -5.0 * dt, 0))
-        if task.keyMap["left"]:
-            task.tempActor.setPos(task.tempActor.getPos() + Vec3(-5.0 * dt, 0, 0))
-        if task.keyMap["right"]:
-            task.tempActor.setPos(task.tempActor.getPos() + Vec3(5.0 * dt, 0, 0))
-        if task.keyMap["shoot"]:
-            print("Zap!")
-        return task.cont
-
-        # Adding task to task manager
-        self.updateTask = taskMgr.add(update, "update")
-
-        # updating the state of the game with key press and release
-    def updateKeyMap(self, controlName, controlState):
-        self.keyMap[controlName] = controlState
-        print(controlName, "set to", controlState)
-
         self.accept("w", self.updateKeyMap, ["up", True])
         self.accept("w-up", self.updateKeyMap, ["up", False])
         self.accept("s", self.updateKeyMap, ["down", True])
@@ -114,6 +85,9 @@ class Game(ShowBase):
         self.accept("d-up", self.updateKeyMap, ["right", False])
         self.accept("mouse1", self.updateKeyMap, ["shoot", True])
         self.accept("mouse1-up", self.updateKeyMap, ["shoot", False])
+
+        # Adding task to task manager
+        self.updateTask = taskMgr.add(self.update, "update")
 
         self.cTrav = CollisionTraverser()
         # Panda should now automatically update that traverser!
@@ -166,6 +140,32 @@ class Game(ShowBase):
         wallNode.addSolid(wallSolid)
         wall = self.render.attachNewNode(wallNode)
         wall.setX(-8.0)
+
+    # updating the state of the game with key press and release
+    def updateKeyMap(self, controlName, controlState):
+        self.keyMap[controlName] = controlState
+        print(controlName, "set to", controlState)
+
+
+    # Method that accepts a task and returns a "looping task"....? I don't know how to frame it
+    def update(self, task):
+        # Get the amount of time since the last update
+        dt = globalClock.getDt()
+
+        # If any movement keys are pressed, use the above time
+        # to calculate how far to move the character, and apply that.
+        if self.keyMap["up"]:
+            self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, 5.0 * dt, 0))
+        if self.keyMap["down"]:
+            self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, -5.0 * dt, 0))
+        if self.keyMap["left"]:
+            self.tempActor.setPos(self.tempActor.getPos() + Vec3(-5.0 * dt, 0, 0))
+        if self.keyMap["right"]:
+            self.tempActor.setPos(self.tempActor.getPos() + Vec3(5.0 * dt, 0, 0))
+        if self.keyMap["shoot"]:
+            print("Zap!")
+
+        return task.cont
 
 
 game = Game()
