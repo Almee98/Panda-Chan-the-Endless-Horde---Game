@@ -2,19 +2,15 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.task.TaskManagerGlobal import taskMgr
 from panda3d.core import WindowProperties
-
-from direct.actor.Actor import Actor
-
 from panda3d.core import AmbientLight
-
 from panda3d.core import DirectionalLight
-
 from panda3d.core import Vec4, Vec3
-
 from panda3d.core import CollisionTraverser
 from panda3d.core import CollisionHandlerPusher
 from panda3d.core import CollisionSphere, CollisionNode
 from panda3d.core import CollisionTube
+from direct.actor.Actor import Actor
+from GameObject import *
 
 
 class Game(ShowBase):
@@ -141,6 +137,10 @@ class Game(ShowBase):
         wall = self.render.attachNewNode(wallNode)
         wall.setX(-8.0)
 
+        self.player = Player()
+
+        self.tempEnemy = WalkingEnemy(Vec3(5, 0, 0))
+
     # updating the state of the game with key press and release
     def updateKeyMap(self, controlName, controlState):
         self.keyMap[controlName] = controlState
@@ -152,18 +152,22 @@ class Game(ShowBase):
         # Get the amount of time since the last update
         dt = globalClock.getDt()
 
-        # If any movement keys are pressed, use the above time
-        # to calculate how far to move the character, and apply that.
-        if self.keyMap["up"]:
-            self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, 5.0 * dt, 0))
-        if self.keyMap["down"]:
-            self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, -5.0 * dt, 0))
-        if self.keyMap["left"]:
-            self.tempActor.setPos(self.tempActor.getPos() + Vec3(-5.0 * dt, 0, 0))
-        if self.keyMap["right"]:
-            self.tempActor.setPos(self.tempActor.getPos() + Vec3(5.0 * dt, 0, 0))
-        if self.keyMap["shoot"]:
-            print("Zap!")
+        self.player.update(self.keyMap, dt)
+
+        self.tempEnemy.update(self.player, dt)
+
+        # # If any movement keys are pressed, use the above time
+        # # to calculate how far to move the character, and apply that.
+        # if self.keyMap["up"]:
+        #     self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, 5.0 * dt, 0))
+        # if self.keyMap["down"]:
+        #     self.tempActor.setPos(self.tempActor.getPos() + Vec3(0, -5.0 * dt, 0))
+        # if self.keyMap["left"]:
+        #     self.tempActor.setPos(self.tempActor.getPos() + Vec3(-5.0 * dt, 0, 0))
+        # if self.keyMap["right"]:
+        #     self.tempActor.setPos(self.tempActor.getPos() + Vec3(5.0 * dt, 0, 0))
+        # if self.keyMap["shoot"]:
+        #     print("Zap!")
 
         return task.cont
 
