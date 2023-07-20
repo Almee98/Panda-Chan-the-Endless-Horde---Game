@@ -7,7 +7,7 @@ FRICTION = 150.0
 class GameObject():
     def __init__(self, pos, modelName, modelAnims, maxHealth, maxSpeed, colliderName):
         self.actor = Actor(modelName, modelAnims)
-        self.actor.reparentTo(self.render)
+        self.actor.reparentTo(render)
         self.actor.setPos(pos)
 
         self.maxHealth = maxHealth
@@ -79,10 +79,10 @@ class Player(GameObject):
     def __init__(self):
         GameObject.__init__(self,
                             Vec3(0, 0, 0),
-                            "Models/PandaChan/act_p3d_chan",
+                            "models/panda_chan/act_p3d_chan",
                               {
-                                  "stand" : "Models/PandaChan/a_p3d_chan_idle",
-                                  "walk" : "Models/PandaChan/a_p3d_chan_run"
+                                  "stand" : "models/panda_chan/a_p3d_chan_idle",
+                                  "walk" : "models/panda_chan/a_p3d_chan_run"
                               },
                             5,
                             10,
@@ -176,13 +176,13 @@ class Enemy(GameObject):
 class WalkingEnemy(Enemy):
     def __init__(self, pos):
         Enemy.__init__(self, pos,
-                       "Models/Misc/simpleEnemy",
+                       "models/SimpleEnemy/simpleEnemy",
                        {
-                        "stand" : "Models/Misc/simpleEnemy-stand",
-                        "walk" : "Models/Misc/simpleEnemy-walk",
-                        "attack" : "Models/Misc/simpleEnemy-attack",
-                        "die" : "Models/Misc/simpleEnemy-die",
-                        "spawn" : "Models/Misc/simpleEnemy-spawn"
+                        "stand" : "models/SimpleEnemy/simpleEnemy-stand",
+                        "walk" : "models/SimpleEnemy/simpleEnemy-walk",
+                        "attack" : "models/SimpleEnemy/simpleEnemy-attack",
+                        "die" : "models/SimpleEnemy/simpleEnemy-die",
+                        "spawn" : "models/SimpleEnemy/simpleEnemy-spawn"
                         },
                        3.0,
                        7.0,
