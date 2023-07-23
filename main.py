@@ -110,10 +110,49 @@ class Game(ShowBase):
 
         self.tempEnemy = WalkingEnemy(Vec3(5, 0, 0))
 
+        self.tempTrap = TrapEnemy(Vec3(-2, 7, 0))
+
+        # We ask pusher to "in"-pattern of the form “%fn-into-%in”.
+        # "%fn" will be replaced with "from" collision object and "%in" will be replaced with "into" collision object.
+        self.pusher.add_in_pattern("%fn-into-%in")
+
+        # receiving those events (works similar to key-events)
+        self.accept("trapEnemy-into-wall", self.stopTrap)
+        self.accept("trapEnemy-into-trapEnemy", self.stopTrap)
+        self.accept("trapEnemy-into-player", self.trapHitsSomething)
+        self.accept("trapEnemy-into-walkingEnemy", self.trapHitsSomething)
+
     # updating the state of the game with key press and release
     def updateKeyMap(self, controlName, controlState):
         self.keyMap[controlName] = controlState
         print(controlName, "set to", controlState)
+
+    def stopTrap(self, entry):
+        collider = entry.getFromNodePath()
+        if collider.hasPythonTag("owner"):
+            trap = collider.getPythonTag("owner")
+            trap.moveDirection = 0
+            trap.ignorePlayer = False
+
+    def trapHitsSomething(self, entry):
+        collider = entry.getFromNodePath()
+        if collider.hasPythonTag("owner"):
+            trap = collider.getPythonTag("owner")
+
+            # We don't want stationary traps to do damage,
+            # so ignore the collision if the "moveDirection" is 0
+            if trap.moveDirection == 0:
+                return
+
+            collider = entry.getIntoNodePath()
+            if collider.hasPythonTag("owner"):
+                obj = collider.getPythonTag("owner")
+                if isinstance(obj, Player):
+                    if not trap.ignorePlayer:
+                        obj.alterHealth(-1)
+                        trap.ignorePlayer = True
+                else:
+                    obj.alterHealth(-10)
 
 
     # Method that accepts a task and returns a "looping task"....? I don't know how to frame it
@@ -124,6 +163,8 @@ class Game(ShowBase):
         self.player.update(self.keyMap, dt)
 
         self.tempEnemy.update(self.player, dt)
+
+        self.tempTrap.update(self.player, dt)
 
         return task.cont
 
