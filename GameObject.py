@@ -1,10 +1,12 @@
 from panda3d.core import Vec3, Vec2
 from direct.actor.Actor import Actor
 from panda3d.core import CollisionSphere, CollisionNode
+from direct.showbase.ShowBase import ShowBase
+
 
 FRICTION = 150.0
 
-class GameObject():
+class GameObject(ShowBase):
     def __init__(self, pos, modelName, modelAnims, maxHealth, maxSpeed, colliderName):
         self.actor = Actor(modelName, modelAnims)
         self.actor.reparentTo(render)
@@ -20,8 +22,6 @@ class GameObject():
 
         self.walking = False
 
-        # Note the "colliderName"--this will be used for
-        # collision-events, later...
         colliderNode = CollisionNode(colliderName)
         colliderNode.addSolid(CollisionSphere(0, 0, 0, 0.3))
         self.collider = self.actor.attachNewNode(colliderNode)
@@ -105,8 +105,8 @@ class Player(GameObject):
 
         self.walking = False
 
-        # If we're  pushing a movement key, add a relevant amount
-        # to our velocity.
+        # If any movement keys are pressed, use the above time
+        # to calculate how far to move the character, and apply that.
         if keys["up"]:
             self.walking = True
             self.velocity.addY(self.acceleration*dt)
@@ -121,7 +121,6 @@ class Player(GameObject):
             self.velocity.addX(self.acceleration*dt)
 
         # Run the appropriate animation for our current state.
-        # See the text below this for an explanation
         if self.walking:
             standControl = self.actor.getAnimControl("stand")
             if standControl.isPlaying():
