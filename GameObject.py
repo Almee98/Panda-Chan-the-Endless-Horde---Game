@@ -6,6 +6,8 @@ from panda3d.core import CollisionRay, CollisionHandlerQueue
 from panda3d.core import BitMask32
 
 import math
+from panda3d.core import Plane, Point3
+
 
 
 FRICTION = 150.0
@@ -158,6 +160,20 @@ class Player(GameObject):
 
         self.actor.loop("stand")
 
+        # This stores the previous position of the mouse,
+        # as a fall-back in case we don't get a good position
+        # on a given update.
+        self.lastMousePos = Vec2(0, 0)
+
+        # Construct a plane facing upwards, and centred at (0, 0, 0)
+        self.groundPlane = Plane(Vec3(0, 0, 1), Vec3(0, 0, 0))
+
+        # This vector is used to calculate the orientation for
+        # the character's model. Since the character faces along
+        # the y-direction, we use the y-axis.
+        self.yVector = Vec2(0, 1)
+        
+
     def update(self, keys, dt):
         GameObject.update(self, dt)
 
@@ -222,6 +238,53 @@ class Player(GameObject):
         else:
             # If we're not shooting, don't show the beam-model.
             self.beamModel.hide()
+
+        # It's possible that we'll find that we
+        # don't have the mouse--such as if the pointer
+        # is outside of the game-window. In that case,
+        # just use the previous position.
+        mouseWatcher = base.mouseWatcherNode
+        if mouseWatcher.hasMouse():
+            mousePos = mouseWatcher.getMouse()
+        else:
+            mousePos = self.lastMousePos
+
+        mousePos3D = Point3()
+        nearPoint = Point3()
+        farPoint = Point3()
+
+        # Get the 3D line corresponding with the
+        # 2D mouse-position.
+        # The "extrude" method will store its result in the
+        # "nearPoint" and "farPoint" objects.
+        base.camLens.extrude(mousePos, nearPoint, farPoint)
+
+        # Get the 3D point at which the 3D line
+        # intersects our ground-plane.
+        # Similarly to the above, the "intersectsLine" method
+        # will store its result in the "mousePos3D" object.
+        self.groundPlane.intersectsLine(mousePos3D,
+                                        render.getRelativePoint(base.camera, nearPoint),
+                                        render.getRelativePoint(base.camera, farPoint))
+
+        # constructing a vector from the player’s position to the point, and take just the horizontal part of it,
+        # since we’re not interested in any difference in z-position
+        firingVector = Vec3(mousePos3D - self.actor.getPos())
+        firingVector2D = firingVector.getXy()
+        firingVector2D.normalize()
+        firingVector.normalize()
+
+        # find the angle that it makes with the positive y-axis –
+        # this is the angle at which to face our player-character
+        heading = self.yVector.signedAngleDeg(firingVector2D)
+
+        self.actor.setH(heading)
+
+        if firingVector.length() > 0.001:
+            self.ray.setOrigin(self.actor.getPos())
+            self.ray.setDirection(firingVector)
+
+        self.lastMousePos = mousePos
 
     # Overriding the cleanup() method of the GameObject class
     def cleanup(self):
