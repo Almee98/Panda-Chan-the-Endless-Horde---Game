@@ -1,21 +1,19 @@
+from panda3d.core import loadPrcFile
+# Load configuration settings from config.py
+loadPrcFile("Panda3D2/config.prc")
+
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.task.TaskManagerGlobal import taskMgr
-from panda3d.core import WindowProperties, BoundingSphere, TextNode
+from panda3d.core import WindowProperties, BoundingSphere
 from panda3d.core import AmbientLight
 from panda3d.core import DirectionalLight
-from panda3d.core import Vec4, Vec3
+from panda3d.core import Vec4
 from panda3d.core import CollisionTraverser
 from panda3d.core import CollisionHandlerPusher
-from panda3d.core import CollisionSphere, CollisionNode
 from panda3d.core import CollisionTube
-from direct.actor.Actor import Actor
 from GameObject import *
 from panda3d.core import Fog
-from panda3d.core import loadPrcFile
-
-# Load configuration settings from config.py
-loadPrcFile("configuration/config.py")
 
 
 class Game(ShowBase):
@@ -23,9 +21,9 @@ class Game(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
 
-        windowProperties = WindowProperties()
-        windowProperties.setTitle("ELI")
-        self.win.requestProperties(windowProperties)
+            # windowProperties = WindowProperties()
+            # windowProperties.setTitle("ELI")
+            # self.win.requestProperties(windowProperties)
 
         self.disableMouse()
 
@@ -48,20 +46,6 @@ class Game(ShowBase):
         # setting the shading to give more depth to the scene
         self.render.setShaderAuto()
 
-        # fog_color = (0.7, 0.7, 0.7)  # Gray color for fog (R, G, B)
-        # fog_density = 0.02  # Density of the fog (adjust as needed)
-        # fog_range = 320  # The distance at which the fog starts and ends
-        #
-        # # Create the Fog object
-        # fog = Fog("LinearFog")
-        # fog.setColor(*fog_color)
-        # fog.setLinearRange(0, fog_range)
-        # fog.setExpDensity(fog_density)  # Use 'setExpDensity' for a more exponential fog effect
-        # # fog.setLinearFallback(45, 160, 320)  # Set a fallback fog based on camera distance
-        # base.setBackgroundColor(fog_color)
-
-        # self.render.attachNewNode(fog)
-        # self.render.setFog(fog)
 
         # Setting up the environment using the loadModel method
         self.environment = self.loader.loadModel("models/Environment/environment")
@@ -159,9 +143,6 @@ class Game(ShowBase):
         self.music.setLoop(True)  # Set the music to loop continuously
         self.music.play()
 
-        # Adding name on the game window
-        self.displayName()
-
         # Adding task to task manager
         self.updateTask = taskMgr.add(self.update, "update")
 
@@ -226,20 +207,6 @@ class Game(ShowBase):
         self.tempTrap.update(self.player, dt)
 
         return task.cont
-
-    def displayName(self):
-        # Create a TextNode to display your name
-        textNode = TextNode("MyNameNode")
-        textNode.setText("Almee")  # Replace "Your Name" with your actual name
-
-        # Set the font for the text
-        font = self.loader.loadFont("Helvetica.ttf")  # Replace with the path to your font file
-        textNode.setFont(font)
-
-        # Create a TextNodePath to attach the TextNode to the scene graph
-        text_node_path = self.render.attachNewNode(textNode)
-        text_node_path.setScale(0.1)  # Adjust the scale of the text
-        text_node_path.setPos(-1.0, 0, 0.9)  # Set the position of the text on the window
 
 
 game = Game()
