@@ -6,8 +6,9 @@ from panda3d.core import CollisionRay, CollisionHandlerQueue
 from panda3d.core import BitMask32
 
 import math
+import random
 from panda3d.core import Plane, Point3
-
+from panda3d.core import CollisionSegment
 
 
 FRICTION = 150.0
@@ -360,6 +361,43 @@ class WalkingEnemy(Enemy):
 
         self.collider.node().setIntoCollideMask(mask)
 
+        # Creating a "melee attack" for the walking enemy.
+        # The Player will take damage from this attack.
+
+        self.attackSegment = CollisionSegment(0, 0, 0, 1, 0, 0)
+
+        segmentNode = CollisionNode("enemyAttackSegment")
+        segmentNode.addSolid(self.attackSegment)
+
+        # A mask that matches the player's, so that
+        # the enemy's attack will hit the player-character,
+        # but not the enemy-character (or other enemies)
+        mask = BitMask32()
+        mask.setBit(1)
+
+        segmentNode.setFromCollideMask(mask)
+
+        mask = BitMask32()
+
+        segmentNode.setIntoCollideMask(mask)
+
+        self.attackSegmentNodePath = render.attachNewNode(segmentNode)
+        self.segmentQueue = CollisionHandlerQueue()
+
+        base.cTrav.addCollider(self.attackSegmentNodePath, self.segmentQueue)
+
+        # How much damage the enemy's attack does
+        # That is, this results in the player-character's
+        # health being reduced by one.
+        self.attackDamage = -1
+
+        # The delay between the start of an attack,
+        # and the attack (potentially) landing
+        self.attackDelay = 0.3
+        self.attackDelayTimer = 0
+        # How long to wait between attacks
+        self.attackWaitTimer = 0
+
     def runLogic(self, player, dt):
         # In short: find the vector between
         # this enemy and the player.
@@ -378,16 +416,64 @@ class WalkingEnemy(Enemy):
         heading = self.yVector.signedAngleDeg(vectorToPlayer2D)
 
         if distanceToPlayer > self.attackDistance*0.9:
-            self.walking = True
-            vectorToPlayer.setZ(0)
-            vectorToPlayer.normalize()
-            self.velocity += vectorToPlayer*self.acceleration*dt
+            attackControl = self.actor.getAnimControl("attack")
+            if not attackControl.isPlaying():
+                self.walking = True
+                vectorToPlayer.setZ(0)
+                vectorToPlayer.normalize()
+                self.velocity += vectorToPlayer*self.acceleration*dt
+                self.attackWaitTimer = 0.2
+                self.attackDelayTimer = 0
         else:
             self.walking = False
             self.velocity.set(0, 0, 0)
 
+            # If we're waiting for an attack to land...
+            if self.attackDelayTimer > 0:
+                self.attackDelayTimer -= dt
+                # If the time has come for the attack to land...
+                if self.attackDelayTimer <= 0:
+                    # Check for a hit..
+                    if self.segmentQueue.getNumEntries() > 0:
+                        self.segmentQueue.sortEntries()
+                        segmentHit = self.segmentQueue.getEntry(0)
+
+                        hitNodePath = segmentHit.getIntoNodePath()
+                        if hitNodePath.hasPythonTag("owner"):
+                            # Apply damage!
+                            hitObject = hitNodePath.getPythonTag("owner")
+                            hitObject.alterHealth(self.attackDamage)
+                            self.attackWaitTimer = 1.0
+
+            # If we're instead waiting to be allowed to attack...
+            elif self.attackWaitTimer > 0:
+                self.attackWaitTimer -= dt
+                # If the wait has ended...
+                if self.attackWaitTimer <= 0:
+                    # Start an attack!
+                    # (And set the wait-timer to a random amount,
+                    #  to vary things a little bit.)
+                    self.attackWaitTimer = random.uniform(0.5, 0.7)
+                    self.attackDelayTimer = self.attackDelay
+                    self.actor.play("attack")
+
         self.actor.setH(heading)
 
+        # Set the segment's start- and end- points.
+        # "getQuat" returns a quaternion--a representation
+        # of orientation or rotation--that represents the
+        # NodePath's orientation. This is useful here,
+        # because Panda's quaternion class has methods to get
+        # forward, right, and up vectors for that orientation.
+        # Thus, what we're doing is making the segment point "forwards".
+        self.attackSegment.setPointA(self.actor.getPos())
+        self.attackSegment.setPointB(self.actor.getPos() + self.actor.getQuat().getForward() * self.attackDistance)
+
+    def cleanup(self):
+        base.cTrav.removeCollider(self.attackSegmentNodePath)
+        self.attackSegmentNodePath.removeNode()
+
+        GameObject.cleanup(self)
 class TrapEnemy(Enemy):
     def __init__(self, pos):
         Enemy.__init__(self, pos,

@@ -111,31 +111,32 @@ class Game(ShowBase):
         wall = self.render.attachNewNode(wallNode)
         wall.setX(-8.0)
 
-        # setting up the fog
-        scene_bounds = self.render.getBounds()
-
-        # Check if the bounding volume is a BoundingSphere
-        if not scene_bounds.is_empty() and isinstance(scene_bounds, BoundingSphere):
-            # Get the center and radius of the bounding sphere
-            center = scene_bounds.getCenter()
-            radius = scene_bounds.getRadius()
-
-            # Calculate the distance for the fog to start and end (half the radius)
-            fog_start = radius
-            fog_end = 2 * radius
-
-            # Set the color and density of the fog
-            fog_color = (0.7, 0.7, 0.7)  # Light gray color for fog (R, G, B)
-            fog_density = 0.02  # Adjust the fog density (higher value for more obscuring)
-
-            # Create the Fog object
-            fog = Fog("LinearFog")
-            fog.setColor(*fog_color)
-            fog.setLinearRange(fog_start, fog_end)
-            fog.setExpDensity(fog_density)  # Use 'setExpDensity' for a more exponential fog effect
-
-            # Apply the Fog to the render node
-            self.render.setFog(fog)
+        # # setting up the fog
+        # scene_bounds = self.render.getBounds()
+        #
+        # # Check if the bounding volume is a BoundingSphere
+        # if not scene_bounds.is_empty() and isinstance(scene_bounds, BoundingSphere):
+        #     # Get the center and radius of the bounding sphere
+        #     center = scene_bounds.getCenter()
+        #     radius = scene_bounds.getRadius()
+        #
+        #     # Calculate the distance for the fog to start and end (half the radius)
+        #     fog_start = radius
+        #     fog_end = 2 * radius
+        #
+        #     # Set the color and density of the fog
+        #     fog_color = (0.7, 0.7, 0.7)  # Light gray color for fog (R, G, B)
+        #     fog_density = 0.02  # Adjust the fog density (higher value for more obscuring)
+        #
+        #     # Create the Fog object
+        #     fog = Fog("LinearFog")
+        #     fog.setColor(*fog_color)
+        #     fog.setLinearRange(fog_start, fog_end)
+        #     fog.setExpDensity(fog_density)  # Use 'setExpDensity'
+        #     for a more exponential fog effect
+        #
+        #     # Apply the Fog to the render node
+        #     self.render.setFog(fog)
 
         # setting up the music
         musicPath = "music/music.mp3"
