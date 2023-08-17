@@ -9,6 +9,12 @@ import math
 import random
 from panda3d.core import Plane, Point3
 from panda3d.core import CollisionSegment
+from direct.gui.OnscreenText import OnscreenText
+from direct.gui.OnscreenImage import OnscreenImage
+from panda3d.core import TextNode
+from panda3d.core import Vec4
+from panda3d.core import PointLight
+
 
 
 FRICTION = 150.0
@@ -173,7 +179,82 @@ class Player(GameObject):
         # the character's model. Since the character faces along
         # the y-direction, we use the y-axis.
         self.yVector = Vec2(0, 1)
-        
+
+        # Displaying Player's health.
+        # Player's health will be displayed as a row of heart icons.
+        self.score = 0
+
+        self.scoreUI = OnscreenText(text="0",
+                                    pos=(-1.3, 0.825),
+                                    mayChange=True,
+                                    align=TextNode.ALeft)
+
+        self.healthIcons = []
+        for i in range(self.maxHealth):
+            icon = OnscreenImage(image="models/UI/health.png",
+                                 pos=(-1.275 + i * 0.075, 0, 0.95),
+                                 scale=0.04)
+            # Since our icons have transparent regions,
+            # we'll activate transparency.
+            icon.setTransparency(True)
+            self.healthIcons.append(icon)
+
+            # A hit-flash will appear when the walking enemy will get hit with the laser.
+            self.beamHitModel = loader.loadModel("models/BambooLaser/bambooLaserHit")
+            self.beamHitModel.reparentTo(render)
+            self.beamHitModel.setZ(1.5)
+            self.beamHitModel.setLightOff()
+            self.beamHitModel.hide()
+
+            self.beamHitPulseRate = 0.15
+            self.beamHitTimer = 0
+
+            self.beamHitLight = PointLight("beamHitLight")
+            self.beamHitLight.setColor(Vec4(0.1, 1.0, 0.2, 1))
+            # These "attenuation" values govern how the light
+            # fades with distance. They are, respectively,
+            # the constant, linear, and quadratic coefficients
+            # of the light's falloff equation.
+            # I experimented until I found values that
+            # looked nice.
+            self.beamHitLight.setAttenuation((1.0, 0.1, 0.5))
+            self.beamHitLightNodePath = render.attachNewNode(self.beamHitLight)
+            # Note that we haven't yet applied the light to
+            # a NodePath, and so it won't yet illuminate
+            # anything.
+
+            # displaying damage taken by the Player
+            self.damageTakenModel = loader.loadModel("models/BambooLaser/playerHit")
+            self.damageTakenModel.setLightOff()
+            self.damageTakenModel.setZ(1.0)
+            self.damageTakenModel.reparentTo(self.actor)
+            self.damageTakenModel.hide()
+
+            self.damageTakenModelTimer = 0
+            self.damageTakenModelDuration = 0.15
+
+    # Updating the score
+    def updateScore(self):
+        self.scoreUI.setText(str(self.score))
+
+    # modifying player's health after taking damage.
+    def alterHealth(self, dHealth):
+        # altering the Player's health based on the damage taken.
+        self.damageTakenModel.show()
+        self.damageTakenModel.setH(random.uniform(0.0, 360.0))
+        self.damageTakenModelTimer = self.damageTakenModelDuration
+
+        GameObject.alterHealth(self, dHealth)
+
+        self.updateHealthUI()
+
+    # updating the hearts on screen to display the modified health of the player.
+    def updateHealthUI(self):
+        for index, icon in enumerate(self.healthIcons):
+            if index < self.health:
+                icon.show()
+            else:
+                icon.hide()
 
     def update(self, keys, dt):
         GameObject.update(self, dt)
@@ -219,6 +300,8 @@ class Player(GameObject):
         # which are invulnerable.
         if keys["shoot"]:
             if self.rayQueue.getNumEntries() > 0:
+                scoredHit = False
+
                 self.rayQueue.sortEntries()
                 rayHit = self.rayQueue.getEntry(0)
                 hitPos = rayHit.getSurfacePoint(render)
@@ -229,6 +312,7 @@ class Player(GameObject):
                     hitObject = hitNodePath.getPythonTag("owner")
                     if not isinstance(hitObject, TrapEnemy):
                         hitObject.alterHealth(self.damagePerSecond * dt)
+                        scoredHit = True
 
                 # Find out how long the beam is, and scale the
                 # beam-model accordingly.
@@ -236,9 +320,37 @@ class Player(GameObject):
                 self.beamModel.setSy(beamLength)
 
                 self.beamModel.show()
+
+                if scoredHit:
+                    self.beamHitModel.show()
+
+                    self.beamHitModel.setPos(hitPos)
+                    self.beamHitLightNodePath.setPos(hitPos + Vec3(0, 0, 0.5))
+
+                    # If the light hasn't already been set here, set it
+                    if not render.hasLight(self.beamHitLightNodePath):
+                        # Apply the light to the scene, so that it
+                        # illuminates things
+                        render.setLight(self.beamHitLightNodePath)
+                else:
+                    # If the light has been set here, remove it
+                    # See explanation in the tutorial-text below...
+                    if render.hasLight(self.beamHitLightNodePath):
+                        # Clear the light from the scene, so that it
+                        # no longer illuminates anything
+                        render.clearLight(self.beamHitLightNodePath)
+
+                    self.beamHitModel.hide()
         else:
+            if render.hasLight(self.beamHitLightNodePath):
+                # Clear the light from the scene, so that it
+                # no longer illuminates anything
+                render.clearLight(self.beamHitLightNodePath)
+
             # If we're not shooting, don't show the beam-model.
             self.beamModel.hide()
+
+            self.beamHitModel.hide()
 
         # It's possible that we'll find that we
         # don't have the mouse--such as if the pointer
@@ -287,9 +399,37 @@ class Player(GameObject):
 
         self.lastMousePos = mousePos
 
+        # run a timer, and use the timer in a sine-function
+        # to pulse the scale of the beam-hit model. When the timer
+        # runs down (and the scale is at its lowest), reset the timer
+        # and randomise the beam-hit model's rotation.
+        self.beamHitTimer -= dt
+        if self.beamHitTimer <= 0:
+            self.beamHitTimer = self.beamHitPulseRate
+            self.beamHitModel.setH(random.uniform(0.0, 360.0))
+        self.beamHitModel.setScale(math.sin(self.beamHitTimer * 3.142 / self.beamHitPulseRate) * 0.4 + 0.9)
+
+        # altering damage taken by the Player.
+        if self.damageTakenModelTimer > 0:
+            self.damageTakenModelTimer -= dt
+            self.damageTakenModel.setScale(2.0 - self.damageTakenModelTimer / self.damageTakenModelDuration)
+            if self.damageTakenModelTimer <= 0:
+                self.damageTakenModel.hide()
+
     # Overriding the cleanup() method of the GameObject class
     def cleanup(self):
+        # Cleaning up the health after quitting the game.
+        self.scoreUI.removeNode()
+        for icon in self.healthIcons:
+            icon.removeNode()
+
+        self.beamHitModel.removeNode()
+
+        render.clearLight(self.beamHitLightNodePath)
+        self.beamHitLightNodePath.removeNode()
+
         base.cTrav.removeCollider(self.rayNodePath)
+
 
         GameObject.cleanup(self)
 
@@ -468,6 +608,17 @@ class WalkingEnemy(Enemy):
         # Thus, what we're doing is making the segment point "forwards".
         self.attackSegment.setPointA(self.actor.getPos())
         self.attackSegment.setPointB(self.actor.getPos() + self.actor.getQuat().getForward() * self.attackDistance)
+
+    def alterHealth(self, dHealth):
+        Enemy.alterHealth(self, dHealth)
+        self.updateHealthVisual()
+
+    def updateHealthVisual(self):
+        perc = self.health / self.maxHealth
+        if perc < 0:
+            perc = 0
+        # The parameters here are red, green, blue, and alpha
+        self.actor.setColorScale(perc, perc, perc, 1)
 
     def cleanup(self):
         base.cTrav.removeCollider(self.attackSegmentNodePath)
