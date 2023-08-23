@@ -485,6 +485,8 @@ class WalkingEnemy(Enemy):
                        7.0,
                        "walkingEnemy")
 
+        self.actor.play("spawn")
+
         self.attackDistance = 0.75
 
         self.acceleration = 100.0
@@ -539,6 +541,11 @@ class WalkingEnemy(Enemy):
         self.attackWaitTimer = 0
 
     def runLogic(self, player, dt):
+
+        # if the spawn animation is playing, we skip the other behaviour in runLogic
+        spawnControl = self.actor.getAnimControl("spawn")
+        if spawnControl is not None and spawnControl.isPlaying():
+            return
         # In short: find the vector between
         # this enemy and the player.
         # If the enemy is far from the player,

@@ -2,6 +2,7 @@ from panda3d.core import loadPrcFile
 # Load configuration settings from config.py
 loadPrcFile("Panda3D2/config.prc")
 
+import random
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.task.TaskManagerGlobal import taskMgr
@@ -111,32 +112,8 @@ class Game(ShowBase):
         wall = self.render.attachNewNode(wallNode)
         wall.setX(-8.0)
 
-        # # setting up the fog
-        # scene_bounds = self.render.getBounds()
-        #
-        # # Check if the bounding volume is a BoundingSphere
-        # if not scene_bounds.is_empty() and isinstance(scene_bounds, BoundingSphere):
-        #     # Get the center and radius of the bounding sphere
-        #     center = scene_bounds.getCenter()
-        #     radius = scene_bounds.getRadius()
-        #
-        #     # Calculate the distance for the fog to start and end (half the radius)
-        #     fog_start = radius
-        #     fog_end = 2 * radius
-        #
-        #     # Set the color and density of the fog
-        #     fog_color = (0.7, 0.7, 0.7)  # Light gray color for fog (R, G, B)
-        #     fog_density = 0.02  # Adjust the fog density (higher value for more obscuring)
-        #
-        #     # Create the Fog object
-        #     fog = Fog("LinearFog")
-        #     fog.setColor(*fog_color)
-        #     fog.setLinearRange(fog_start, fog_end)
-        #     fog.setExpDensity(fog_density)  # Use 'setExpDensity'
-        #     for a more exponential fog effect
-        #
-        #     # Apply the Fog to the render node
-        #     self.render.setFog(fog)
+
+
 
         # setting up the music
         musicPath = "music/music.mp3"
@@ -147,11 +124,45 @@ class Game(ShowBase):
         # Adding task to task manager
         self.updateTask = taskMgr.add(self.update, "update")
 
-        self.player = Player()
+        # We start with no Player character
+        self.player = None
 
-        self.tempEnemy = WalkingEnemy(Vec3(5, 0, 0))
+        # Our enemies, traps, and "dead enemies"
+        self.enemies = []
+        self.trapEnemies = []
 
-        self.tempTrap = TrapEnemy(Vec3(-2, 7, 0))
+        self.deadEnemies = []
+
+        # Setting up some spawn points
+        # These spawn points are positions spaced evenly along the walls,
+        # and when spawning an enemy we'll randomly choose one as the location of the enemy.
+        self.spawnPoints = []
+        numPointsPerWall = 5
+        for i in range(numPointsPerWall):
+            coord = 7.0 / numPointsPerWall + 0.5
+            self.spawnPoints.append(Vec3(-7.0, coord, 0))
+            self.spawnPoints.append(Vec3(7.0, coord, 0))
+            self.spawnPoints.append(Vec3(coord, -7.0, 0))
+            self.spawnPoints.append(Vec3(coord, 7.0, 0))
+
+        # Values to control when to spawn enemies, and
+        # how many enemies there may be at once
+        self.initialSpawnInterval = 1.0
+        self.minimumSpawnInterval = 0.2
+        self.spawnInterval = self.initialSpawnInterval
+        self.spawnTimer = self.spawnInterval
+        self.maxEnemies = 2
+        self.maximumMaxEnemies = 20
+
+        self.numTrapsPerSide = 2
+
+        self.difficultyInterval = 5.0
+        self.difficultyTimer = self.difficultyInterval
+
+        # Start the game!
+        self.startGame()
+
+        self.exitFunc = self.cleanup
 
         # We ask pusher to "in"-pattern of the form “%fn-into-%in”.
         # "%fn" will be replaced with "from" collision object and "%in" will be replaced with "into" collision object.
@@ -203,12 +214,152 @@ class Game(ShowBase):
 
         self.player.update(self.keyMap, dt)
 
-        self.tempEnemy.update(self.player, dt)
+        # If the player is dead, or we're not
+        # playing yet, ignore this logic.
+        if self.player is not None:
+            if self.player.health > 0:
+                self.player.update(self.keyMap, dt)
 
-        self.tempTrap.update(self.player, dt)
+                # Wait to spawn an enemy...
+                self.spawnTimer -= dt
+                if self.spawnTimer <= 0:
+                    # Spawn one!
+                    self.spawnTimer = self.spawnInterval
+                    self.spawnEnemy()
+
+                # Update all enemies and traps
+                [enemy.update(self.player, dt) for enemy in self.enemies]
+                [trap.update(self.player, dt) for trap in self.trapEnemies]
+
+                # Find the enemies that have just
+                # died, if any
+                newlyDeadEnemies = [enemy for enemy in self.enemies if enemy.health <= 0]
+                # And re-build the enemy-list to exclude
+                # those that have just died.
+                self.enemies = [enemy for enemy in self.enemies if enemy.health > 0]
+
+                # Newly-dead enemies should have no collider,
+                # and should play their "die" animation.
+                # In addition, increase the player's score.
+                for enemy in newlyDeadEnemies:
+                    enemy.collider.removeNode()
+                    enemy.actor.play("die")
+                    self.player.score += enemy.scoreValue
+                if len(newlyDeadEnemies) > 0:
+                    self.player.updateScore()
+
+                self.deadEnemies += newlyDeadEnemies
+
+                # Check our "dead enemies" to see
+                # whether they're still animating their
+                # "die" animation. In not, clean them up,
+                # and drop them from the "dead enemies" list.
+                enemiesAnimatingDeaths = []
+                for enemy in self.deadEnemies:
+                    deathAnimControl = enemy.actor.getAnimControl("die")
+                    if deathAnimControl is None or not deathAnimControl.isPlaying():
+                        enemy.cleanup()
+                    else:
+                        enemiesAnimatingDeaths.append(enemy)
+                self.deadEnemies = enemiesAnimatingDeaths
+
+                # Make the game more difficult over time!
+                self.difficultyTimer -= dt
+                if self.difficultyTimer <= 0:
+                    self.difficultyTimer = self.difficultyInterval
+                    if self.maxEnemies < self.maximumMaxEnemies:
+                        self.maxEnemies += 1
+                    if self.spawnInterval > self.minimumSpawnInterval:
+                        self.spawnInterval -= 0.1
+
 
         return task.cont
 
 
+    def startGame(self):
+        self.cleanup()
+
+        self.player = Player()
+
+        self.maxEnemies = 2
+        self.spawnInterval = self.initialSpawnInterval
+
+        self.difficultyTimer = self.difficultyInterval
+
+        sideTrapSlots = [
+            [],
+            [],
+            [],
+            []
+        ]
+        trapSlotDistance = 0.4
+        slotPos = -8 + trapSlotDistance
+        while slotPos < 8:
+            if abs(slotPos) > 1.0:
+                sideTrapSlots[0].append(slotPos)
+                sideTrapSlots[1].append(slotPos)
+                sideTrapSlots[2].append(slotPos)
+                sideTrapSlots[3].append(slotPos)
+            slotPos += trapSlotDistance
+
+        # Create one trap on each side, repeating
+        # for however many traps there should be
+        # per side.
+        for i in range(self.numTrapsPerSide):
+            # Note that we "pop" the chosen location,
+            # so that it won't be chosen again.
+            slot = sideTrapSlots[0].pop(random.randint(0, len(sideTrapSlots[0]) - 1))
+            trap = TrapEnemy(Vec3(slot, 7.0, 0))
+            self.trapEnemies.append(trap)
+
+            slot = sideTrapSlots[1].pop(random.randint(0, len(sideTrapSlots[1]) - 1))
+            trap = TrapEnemy(Vec3(slot, -7.0, 0))
+            self.trapEnemies.append(trap)
+
+            slot = sideTrapSlots[2].pop(random.randint(0, len(sideTrapSlots[2]) - 1))
+            trap = TrapEnemy(Vec3(7.0, slot, 0))
+            trap.moveInX = True
+            self.trapEnemies.append(trap)
+
+            slot = sideTrapSlots[3].pop(random.randint(0, len(sideTrapSlots[3]) - 1))
+            trap = TrapEnemy(Vec3(-7.0, slot, 0))
+            trap.moveInX = True
+            self.trapEnemies.append(trap)
+
+    def spawnEnemy(self):
+        if len(self.enemies) < self.maxEnemies:
+            spawnPoint = random.choice(self.spawnPoints)
+
+            newEnemy = WalkingEnemy(spawnPoint)
+
+            self.enemies.append(newEnemy)
+
+    def cleanup(self):
+        # Call our various cleanup methods,
+        # empty the various lists,
+        # and make the player "None" again.
+
+        for enemy in self.enemies:
+            enemy.cleanup()
+        self.enemies = []
+
+        for enemy in self.deadEnemies:
+            enemy.cleanup()
+        self.deadEnemies = []
+
+        for trap in self.trapEnemies:
+            trap.cleanup()
+        self.trapEnemies = []
+
+        if self.player is not None:
+            self.player.cleanup()
+            self.player = None
+
+    def quit(self):
+        # Clean up, then exit
+
+        self.cleanup()
+
+        base.userExit()
 game = Game()
 game.run()
