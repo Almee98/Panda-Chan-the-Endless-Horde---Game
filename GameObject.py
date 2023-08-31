@@ -1,4 +1,4 @@
-from panda3d.core import Vec3, Vec2
+from panda3d.core import Vec4, Vec3, Vec2
 from direct.actor.Actor import Actor
 from panda3d.core import CollisionSphere, CollisionNode
 from direct.showbase.ShowBase import ShowBase
@@ -12,9 +12,8 @@ from panda3d.core import CollisionSegment
 from direct.gui.OnscreenText import OnscreenText
 from direct.gui.OnscreenImage import OnscreenImage
 from panda3d.core import TextNode
-from panda3d.core import Vec4
-from panda3d.core import PointLight
-
+from panda3d.core import PointLight 
+from panda3d.core import AudioSound
 
 
 FRICTION = 150.0
@@ -24,6 +23,10 @@ class GameObject(ShowBase):
         self.actor = Actor(modelName, modelAnims)
         self.actor.reparentTo(render)
         self.actor.setPos(pos)
+
+        # initializing the sound that will play when an enemy dies as None
+        # This is updated in the alterHealth method
+        self.deathSound = None
 
         self.maxHealth = maxHealth
         self.health = maxHealth
@@ -68,10 +71,14 @@ class GameObject(ShowBase):
         self.actor.setPos(self.actor.getPos() + self.velocity*dt)
 
     def alterHealth(self, dHealth):
+        previousHealth = self.health
         self.health += dHealth
 
         if self.health > self.maxHealth:
             self.health = self.maxHealth
+
+        if previousHealth > 0 and self.health <= 0 and self.deathSound is not None:
+            self.deathSound.play()
 
     def cleanup(self):
         # Remove various nodes, and clear the Python-tag--see below!
@@ -105,6 +112,13 @@ class Player(GameObject):
         # the first sub-node of our Actor-NodePath
         # to have it face as we want.
         self.actor.getChild(0).setH(180)
+
+        self.laserSoundNoHit = loader.loadSfx("music/laserNoHit.ogg")
+        self.laserSoundNoHit.setLoop(True)
+        self.laserSoundHit = loader.loadSfx("music/laserHit.ogg")
+        self.laserSoundHit.setLoop(True)
+
+        self.hurtSound = loader.loadSfx("music/FemaleDmgNoise.ogg")
 
         # Since our "Game" object is the "ShowBase" object,
         # we can access it via the global "base" variable.
@@ -233,29 +247,6 @@ class Player(GameObject):
             self.damageTakenModelTimer = 0
             self.damageTakenModelDuration = 0.15
 
-    # Updating the score
-    def updateScore(self):
-        self.scoreUI.setText(str(self.score))
-
-    # modifying player's health after taking damage.
-    def alterHealth(self, dHealth):
-        # altering the Player's health based on the damage taken.
-        self.damageTakenModel.show()
-        self.damageTakenModel.setH(random.uniform(0.0, 360.0))
-        self.damageTakenModelTimer = self.damageTakenModelDuration
-
-        GameObject.alterHealth(self, dHealth)
-
-        self.updateHealthUI()
-
-    # updating the hearts on screen to display the modified health of the player.
-    def updateHealthUI(self):
-        for index, icon in enumerate(self.healthIcons):
-            if index < self.health:
-                icon.show()
-            else:
-                icon.hide()
-
     def update(self, keys, dt):
         GameObject.update(self, dt)
 
@@ -265,16 +256,16 @@ class Player(GameObject):
         # to calculate how far to move the character, and apply that.
         if keys["up"]:
             self.walking = True
-            self.velocity.addY(self.acceleration*dt)
+            self.velocity.addY(self.acceleration * dt)
         if keys["down"]:
             self.walking = True
-            self.velocity.addY(-self.acceleration*dt)
+            self.velocity.addY(-self.acceleration * dt)
         if keys["left"]:
             self.walking = True
-            self.velocity.addX(-self.acceleration*dt)
+            self.velocity.addX(-self.acceleration * dt)
         if keys["right"]:
             self.walking = True
-            self.velocity.addX(self.acceleration*dt)
+            self.velocity.addX(self.acceleration * dt)
 
         # Run the appropriate animation for our current state.
         if self.walking:
@@ -322,6 +313,13 @@ class Player(GameObject):
                 self.beamModel.show()
 
                 if scoredHit:
+                    # We've hit something, so stop the "no-hit" sound
+                    # and play the "hit something" sound
+                    if self.laserSoundNoHit.status() == AudioSound.PLAYING:
+                        self.laserSoundNoHit.stop()
+                    if self.laserSoundHit.status() != AudioSound.PLAYING:
+                        self.laserSoundHit.play()
+
                     self.beamHitModel.show()
 
                     self.beamHitModel.setPos(hitPos)
@@ -333,6 +331,14 @@ class Player(GameObject):
                         # illuminates things
                         render.setLight(self.beamHitLightNodePath)
                 else:
+                    # We're firing, but hitting nothing, so
+                    # stop the "hit something" sound, and play
+                    # the "no-hit" sound.
+                    if self.laserSoundHit.status() == AudioSound.PLAYING:
+                        self.laserSoundHit.stop()
+                    if self.laserSoundNoHit.status() != AudioSound.PLAYING:
+                        self.laserSoundNoHit.play()
+
                     # If the light has been set here, remove it
                     # See explanation in the tutorial-text below...
                     if render.hasLight(self.beamHitLightNodePath):
@@ -342,15 +348,23 @@ class Player(GameObject):
 
                     self.beamHitModel.hide()
         else:
+            # If we're not shooting, don't show the beam-model.
+            self.beamModel.hide()
+
+            self.beamHitModel.hide()
+
+            # We're not firing, so stop both the
+            # "hit something" and "no-hit" sounds
+            if self.laserSoundNoHit.status() == AudioSound.PLAYING:
+                self.laserSoundNoHit.stop()
+            if self.laserSoundHit.status() == AudioSound.PLAYING:
+                self.laserSoundHit.stop()
+
             if render.hasLight(self.beamHitLightNodePath):
                 # Clear the light from the scene, so that it
                 # no longer illuminates anything
                 render.clearLight(self.beamHitLightNodePath)
 
-            # If we're not shooting, don't show the beam-model.
-            self.beamModel.hide()
-
-            self.beamHitModel.hide()
 
         # It's possible that we'll find that we
         # don't have the mouse--such as if the pointer
@@ -416,20 +430,48 @@ class Player(GameObject):
             if self.damageTakenModelTimer <= 0:
                 self.damageTakenModel.hide()
 
+    # Updating the score
+    def updateScore(self):
+        self.scoreUI.setText(str(self.score))
+
+    # modifying player's health after taking damage.
+    def alterHealth(self, dHealth):
+        self.hurtSound.play()
+
+        # altering the Player's health based on the damage taken.
+        self.damageTakenModel.show()
+        self.damageTakenModel.setH(random.uniform(0.0, 360.0))
+        self.damageTakenModelTimer = self.damageTakenModelDuration
+
+        GameObject.alterHealth(self, dHealth)
+
+        self.updateHealthUI()
+
+    # updating the hearts on screen to display the modified health of the player.
+    def updateHealthUI(self):
+        for index, icon in enumerate(self.healthIcons):
+            if index < self.health:
+                icon.show()
+            else:
+                icon.hide()
+
+
     # Overriding the cleanup() method of the GameObject class
     def cleanup(self):
         # Cleaning up the health after quitting the game.
+        self.laserSoundHit.stop()
+        self.laserSoundNoHit.stop()
+
         self.scoreUI.removeNode()
         for icon in self.healthIcons:
             icon.removeNode()
 
         self.beamHitModel.removeNode()
 
-        render.clearLight(self.beamHitLightNodePath)
-        self.beamHitLightNodePath.removeNode()
-
         base.cTrav.removeCollider(self.rayNodePath)
 
+        render.clearLight(self.beamHitLightNodePath)
+        self.beamHitLightNodePath.removeNode()
 
         GameObject.cleanup(self)
 
@@ -487,6 +529,10 @@ class WalkingEnemy(Enemy):
 
         self.actor.play("spawn")
 
+        # This "deathSound" is the one that will be used by the logic
+        self.deathSound = loader.loadSfx("music/enemyDie.ogg")
+        self.attackSound = loader.loadSfx("music/enemyAttack.ogg")
+
         self.attackDistance = 0.75
 
         self.acceleration = 100.0
@@ -541,7 +587,6 @@ class WalkingEnemy(Enemy):
         self.attackWaitTimer = 0
 
     def runLogic(self, player, dt):
-
         # if the spawn animation is playing, we skip the other behaviour in runLogic
         spawnControl = self.actor.getAnimControl("spawn")
         if spawnControl is not None and spawnControl.isPlaying():
@@ -603,6 +648,7 @@ class WalkingEnemy(Enemy):
                     self.attackWaitTimer = random.uniform(0.5, 0.7)
                     self.attackDelayTimer = self.attackDelay
                     self.actor.play("attack")
+                    self.attackSound.play()
 
         self.actor.setH(heading)
 
@@ -643,6 +689,11 @@ class TrapEnemy(Enemy):
                        100.0,
                        10.0,
                        "trapEnemy")
+
+        self.impactSound = loader.loadSfx("music/trapHitsSomething.ogg")
+        self.stopSound = loader.loadSfx("music/trapStop.ogg")
+        self.movementSound = loader.loadSfx("music/trapSlide.ogg")
+        self.movementSound.setLoop(True)
 
         base.pusher.addCollider(self.collider, self.actor)
         base.cTrav.addCollider(self.collider, base.pusher)
@@ -688,6 +739,12 @@ class TrapEnemy(Enemy):
 
             if abs(detector) < 0.5:
                 self.moveDirection = math.copysign(1, movement)
+                self.movementSound.play()
 
     def alterHealth(self, dHealth):
         pass
+
+    def cleanup(self):
+        self.movementSound.stop()
+
+        Enemy.cleanup(self)

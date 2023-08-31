@@ -1,20 +1,18 @@
+import panda3d
+import random
+from GameObject import *
 from panda3d.core import loadPrcFile
 # Load configuration settings from config.py
 loadPrcFile("Panda3D2/config.prc")
 
-import random
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from direct.task.TaskManagerGlobal import taskMgr
 from panda3d.core import WindowProperties, BoundingSphere
-from panda3d.core import AmbientLight
-from panda3d.core import DirectionalLight
-from panda3d.core import Vec4
-from panda3d.core import CollisionTraverser
-from panda3d.core import CollisionHandlerPusher
-from panda3d.core import CollisionTube
-from GameObject import *
-from panda3d.core import Fog
+from panda3d.core import AmbientLight, DirectionalLight
+from panda3d.core import Vec4, Vec3
+from panda3d.core import CollisionTraverser, CollisionHandlerPusher, CollisionTube
+from panda3d.core import CollisionNode, CollisionSphere
 
 
 class Game(ShowBase):
@@ -22,15 +20,13 @@ class Game(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
 
-            # windowProperties = WindowProperties()
-            # windowProperties.setTitle("ELI")
-            # self.win.requestProperties(windowProperties)
-
         self.disableMouse()
 
         properties = WindowProperties()
         properties.setSize(950, 600)
         self.win.requestProperties(properties)
+
+        self.exitFunc = self.cleanup
 
         mainLight = DirectionalLight("main light")
         self.mainLightNodePath = self.render.attachNewNode(mainLight)
@@ -54,6 +50,15 @@ class Game(ShowBase):
 
         self.camera.setPos(0, 0, 32)
         self.camera.setP(-90)
+
+        # setting up the music
+        music = self.loader.loadMusic("music/Defending-the-Princess-Haunted_v002.ogg")
+        music.setLoop(True)
+        music.setVolume(0.075)
+        music.play()
+
+        # setting up the sound effect for enemy spawning
+        self.enemySpawnSound = self.loader.loadSfx("music/enemySpawn.ogg")
 
         self.keyMap = {
             "up": False,
@@ -84,42 +89,43 @@ class Game(ShowBase):
         # (not 3D because we're playing on a flat surface)
         self.pusher.setHorizontal(True)
 
+        # We ask pusher to "in"-pattern of the form “%fn-into-%in”.
+        # "%fn" will be replaced with "from" collision object and "%in" will be replaced with "into" collision object.
+        self.pusher.add_in_pattern("%fn-into-%in")
+
+        # receiving those events (works similar to key-events)
+        self.accept("trapEnemy-into-wall", self.stopTrap)
+        self.accept("trapEnemy-into-trapEnemy", self.stopTrap)
+        self.accept("trapEnemy-into-player", self.trapHitsSomething)
+        self.accept("trapEnemy-into-walkingEnemy", self.trapHitsSomething)
+
 
         # Tubes are defined by their start-points, end-points, and radius.
         # In this first case, the tube goes from (-8, 0, 0) to (8, 0, 0),
         # and has a radius of 0.2.
         wallSolid = CollisionTube(-8.0, 0, 0, 8.0, 0, 0, 0.2)
-        wallNode = CollisionNode("wall")
+        wallNode = panda3d.core.CollisionNode("wall")
         wallNode.addSolid(wallSolid)
         wall = self.render.attachNewNode(wallNode)
         wall.setY(8.0)
 
         wallSolid = CollisionTube(-8.0, 0, 0, 8.0, 0, 0, 0.2)
-        wallNode = CollisionNode("wall")
+        wallNode = panda3d.core.CollisionNode("wall")
         wallNode.addSolid(wallSolid)
         wall = self.render.attachNewNode(wallNode)
         wall.setY(-8.0)
 
         wallSolid = CollisionTube(0, -8.0, 0, 0, 8.0, 0, 0.2)
-        wallNode = CollisionNode("wall")
+        wallNode = panda3d.core.CollisionNode("wall")
         wallNode.addSolid(wallSolid)
         wall = self.render.attachNewNode(wallNode)
         wall.setX(8.0)
 
         wallSolid = CollisionTube(0, -8.0, 0, 0, 8.0, 0, 0.2)
-        wallNode = CollisionNode("wall")
+        wallNode = panda3d.core.CollisionNode("wall")
         wallNode.addSolid(wallSolid)
         wall = self.render.attachNewNode(wallNode)
         wall.setX(-8.0)
-
-
-
-
-        # setting up the music
-        musicPath = "music/music.mp3"
-        self.music = self.loader.loadMusic(musicPath)
-        self.music.setLoop(True)  # Set the music to loop continuously
-        self.music.play()
 
         # Adding task to task manager
         self.updateTask = taskMgr.add(self.update, "update")
@@ -162,17 +168,55 @@ class Game(ShowBase):
         # Start the game!
         self.startGame()
 
-        self.exitFunc = self.cleanup
+    def startGame(self):
+        self.cleanup()
 
-        # We ask pusher to "in"-pattern of the form “%fn-into-%in”.
-        # "%fn" will be replaced with "from" collision object and "%in" will be replaced with "into" collision object.
-        self.pusher.add_in_pattern("%fn-into-%in")
+        self.player = Player()
 
-        # receiving those events (works similar to key-events)
-        self.accept("trapEnemy-into-wall", self.stopTrap)
-        self.accept("trapEnemy-into-trapEnemy", self.stopTrap)
-        self.accept("trapEnemy-into-player", self.trapHitsSomething)
-        self.accept("trapEnemy-into-walkingEnemy", self.trapHitsSomething)
+        self.maxEnemies = 2
+        self.spawnInterval = self.initialSpawnInterval
+
+        self.difficultyTimer = self.difficultyInterval
+
+        sideTrapSlots = [
+            [],
+            [],
+            [],
+            []
+        ]
+        trapSlotDistance = 0.4
+        slotPos = -8 + trapSlotDistance
+        while slotPos < 8:
+            if abs(slotPos) > 1.0:
+                sideTrapSlots[0].append(slotPos)
+                sideTrapSlots[1].append(slotPos)
+                sideTrapSlots[2].append(slotPos)
+                sideTrapSlots[3].append(slotPos)
+            slotPos += trapSlotDistance
+
+        # Create one trap on each side, repeating
+        # for however many traps there should be
+        # per side.
+        for i in range(self.numTrapsPerSide):
+            # Note that we "pop" the chosen location,
+            # so that it won't be chosen again.
+            slot = sideTrapSlots[0].pop(random.randint(0, len(sideTrapSlots[0]) - 1))
+            trap = TrapEnemy(Vec3(slot, 7.0, 0))
+            self.trapEnemies.append(trap)
+
+            slot = sideTrapSlots[1].pop(random.randint(0, len(sideTrapSlots[1]) - 1))
+            trap = TrapEnemy(Vec3(slot, -7.0, 0))
+            self.trapEnemies.append(trap)
+
+            slot = sideTrapSlots[2].pop(random.randint(0, len(sideTrapSlots[2]) - 1))
+            trap = TrapEnemy(Vec3(7.0, slot, 0))
+            trap.moveInX = True
+            self.trapEnemies.append(trap)
+
+            slot = sideTrapSlots[3].pop(random.randint(0, len(sideTrapSlots[3]) - 1))
+            trap = TrapEnemy(Vec3(-7.0, slot, 0))
+            trap.moveInX = True
+            self.trapEnemies.append(trap)
 
     # updating the state of the game with key press and release
     def updateKeyMap(self, controlName, controlState):
@@ -185,11 +229,15 @@ class Game(ShowBase):
             trap = collider.getPythonTag("owner")
             trap.moveDirection = 0
             trap.ignorePlayer = False
+            trap.movementSound.stop()
+            trap.stopSound.play()
 
     def trapHitsSomething(self, entry):
         collider = entry.getFromNodePath()
         if collider.hasPythonTag("owner"):
             trap = collider.getPythonTag("owner")
+            # playing the impact sound
+            trap.impactSound.play()
 
             # We don't want stationary traps to do damage,
             # so ignore the collision if the "moveDirection" is 0
@@ -275,62 +323,13 @@ class Game(ShowBase):
 
         return task.cont
 
-
-    def startGame(self):
-        self.cleanup()
-
-        self.player = Player()
-
-        self.maxEnemies = 2
-        self.spawnInterval = self.initialSpawnInterval
-
-        self.difficultyTimer = self.difficultyInterval
-
-        sideTrapSlots = [
-            [],
-            [],
-            [],
-            []
-        ]
-        trapSlotDistance = 0.4
-        slotPos = -8 + trapSlotDistance
-        while slotPos < 8:
-            if abs(slotPos) > 1.0:
-                sideTrapSlots[0].append(slotPos)
-                sideTrapSlots[1].append(slotPos)
-                sideTrapSlots[2].append(slotPos)
-                sideTrapSlots[3].append(slotPos)
-            slotPos += trapSlotDistance
-
-        # Create one trap on each side, repeating
-        # for however many traps there should be
-        # per side.
-        for i in range(self.numTrapsPerSide):
-            # Note that we "pop" the chosen location,
-            # so that it won't be chosen again.
-            slot = sideTrapSlots[0].pop(random.randint(0, len(sideTrapSlots[0]) - 1))
-            trap = TrapEnemy(Vec3(slot, 7.0, 0))
-            self.trapEnemies.append(trap)
-
-            slot = sideTrapSlots[1].pop(random.randint(0, len(sideTrapSlots[1]) - 1))
-            trap = TrapEnemy(Vec3(slot, -7.0, 0))
-            self.trapEnemies.append(trap)
-
-            slot = sideTrapSlots[2].pop(random.randint(0, len(sideTrapSlots[2]) - 1))
-            trap = TrapEnemy(Vec3(7.0, slot, 0))
-            trap.moveInX = True
-            self.trapEnemies.append(trap)
-
-            slot = sideTrapSlots[3].pop(random.randint(0, len(sideTrapSlots[3]) - 1))
-            trap = TrapEnemy(Vec3(-7.0, slot, 0))
-            trap.moveInX = True
-            self.trapEnemies.append(trap)
-
     def spawnEnemy(self):
         if len(self.enemies) < self.maxEnemies:
             spawnPoint = random.choice(self.spawnPoints)
 
             newEnemy = WalkingEnemy(spawnPoint)
+
+            self.enemySpawnSound.play()
 
             self.enemies.append(newEnemy)
 
