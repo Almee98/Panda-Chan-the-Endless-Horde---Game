@@ -108,17 +108,23 @@ class Player(GameObject):
                             10,
                             "player")
 
+        self.scoreUI = OnscreenText(text="0",
+                                    pos=(-1.3, 0.825),
+                                    mayChange=True,
+                                    align=TextNode.ALeft,
+                                    font=base.font)
+
         # Panda-chan faces "backwards", so we just turn
         # the first sub-node of our Actor-NodePath
         # to have it face as we want.
         self.actor.getChild(0).setH(180)
 
-        self.laserSoundNoHit = loader.loadSfx("music/laserNoHit.ogg")
+        self.laserSoundNoHit = loader.loadSfx("sounds/laserNoHit.ogg")
         self.laserSoundNoHit.setLoop(True)
-        self.laserSoundHit = loader.loadSfx("music/laserHit.ogg")
+        self.laserSoundHit = loader.loadSfx("sounds/laserHit.ogg")
         self.laserSoundHit.setLoop(True)
 
-        self.hurtSound = loader.loadSfx("music/FemaleDmgNoise.ogg")
+        self.hurtSound = loader.loadSfx("sounds/FemaleDmgNoise.ogg")
 
         # Since our "Game" object is the "ShowBase" object,
         # we can access it via the global "base" variable.
@@ -530,8 +536,8 @@ class WalkingEnemy(Enemy):
         self.actor.play("spawn")
 
         # This "deathSound" is the one that will be used by the logic
-        self.deathSound = loader.loadSfx("music/enemyDie.ogg")
-        self.attackSound = loader.loadSfx("music/enemyAttack.ogg")
+        self.deathSound = loader.loadSfx("sounds/enemyDie.ogg")
+        self.attackSound = loader.loadSfx("sounds/enemyAttack.ogg")
 
         self.attackDistance = 0.75
 
@@ -690,9 +696,9 @@ class TrapEnemy(Enemy):
                        10.0,
                        "trapEnemy")
 
-        self.impactSound = loader.loadSfx("music/trapHitsSomething.ogg")
-        self.stopSound = loader.loadSfx("music/trapStop.ogg")
-        self.movementSound = loader.loadSfx("music/trapSlide.ogg")
+        self.impactSound = loader.loadSfx("sounds/trapHitsSomething.ogg")
+        self.stopSound = loader.loadSfx("sounds/trapStop.ogg")
+        self.movementSound = loader.loadSfx("sounds/trapSlide.ogg")
         self.movementSound.setLoop(True)
 
         base.pusher.addCollider(self.collider, self.actor)

@@ -14,6 +14,7 @@ from panda3d.core import Vec4, Vec3
 from panda3d.core import CollisionTraverser, CollisionHandlerPusher, CollisionTube
 from panda3d.core import CollisionNode, CollisionSphere
 
+from direct.gui.DirectGui import *
 
 class Game(ShowBase):
 
@@ -50,15 +51,6 @@ class Game(ShowBase):
 
         self.camera.setPos(0, 0, 32)
         self.camera.setP(-90)
-
-        # setting up the music
-        music = self.loader.loadMusic("music/Defending-the-Princess-Haunted_v002.ogg")
-        music.setLoop(True)
-        music.setVolume(0.075)
-        music.play()
-
-        # setting up the sound effect for enemy spawning
-        self.enemySpawnSound = self.loader.loadSfx("music/enemySpawn.ogg")
 
         self.keyMap = {
             "up": False,
@@ -165,10 +157,175 @@ class Game(ShowBase):
         self.difficultyInterval = 5.0
         self.difficultyTimer = self.difficultyInterval
 
-        # Start the game!
-        self.startGame()
+        # setting up the sound effect for enemy spawning
+        self.enemySpawnSound = self.loader.loadSfx("sounds/enemySpawn.ogg")
+
+        # Creating a dialogue box for "game over" menu
+        #
+        # Parameters used:
+        # "frameSize" is how big the GUI element is
+        #
+        # "fadeScreen" is a semi-transparent cover that
+        #   DirectDialog can put "behind" itself,
+        #   to obscure the backdrop and prevent mouse-clicks
+        #   and key-presses from getting through.
+        #
+        # "relief" is the style of its backing geometry, whether
+        #   with a border that's raised, sunken, flat, or ridged--
+        #   or with no backing at all.
+        self.gameOverScreen = DirectDialog(frameSize=(-0.7, 0.7, -0.7, 0.7),
+                                           fadeScreen=0.4,
+                                           relief=DGG.FLAT,
+                                           frameTexture="UI/stoneFrame.png")
+        # We don't want this screen to show
+        # up until the player loses, so we'll
+        # hide it at first.
+        self.gameOverScreen.hide()
+
+        # loading the font
+        self.font = self.loader.loadFont("font/wbx_komik/Wbxkomik.ttf")
+
+        # A set of images, one for each button-state,
+        # in the order that Panda expects
+        buttonImages = (
+            self.loader.loadTexture("UI/UIButton.png"),
+            self.loader.loadTexture("UI/UIButtonPressed.png"),
+            self.loader.loadTexture("UI/UIButtonHighlighted.png"),
+            self.loader.loadTexture("UI/UIButtonDisabled.png")
+        )
+
+        # We create a "label" -- a GUI item that shows text, or image, or both:
+        # Parameters used:
+        # "text" is, well, the text to display
+        #
+        # "parent" is the node of which this GUI item
+        #   should be a child. We're attaching it to our
+        #   "gameOverScreen" in this case.
+        #
+        # "pos" is the location at which we
+        #   want it to appear. As with all nodes,
+        #   this is relative to its parent!
+        label = DirectLabel(text="Game Over!",
+                            parent=self.gameOverScreen,
+                            scale=0.1,
+                            pos=(0, 0, 0.2),
+                            text_font=self.font,
+                            relief=None)
+
+        self.finalScoreLabel = DirectLabel(text="",
+                                           parent=self.gameOverScreen,
+                                           scale=0.07,
+                                           pos=(0, 0, 0),
+                                           text_font=self.font,
+                                           relief=None)
+
+        # Make a button.
+        #
+        # Parameters used (that are new):
+        # "command" is the method to run when
+        #   the button is pressed
+        btn = DirectButton(text="Restart",
+                           command=self.startGame,
+                           pos=(-0.3, 0, -0.2),
+                           parent=self.gameOverScreen,
+                           scale=0.07,
+                           text_font=self.font,
+                           clickSound=self.loader.loadSfx("sounds/UIClick.ogg"),
+                           frameTexture=buttonImages,
+                           frameSize=(-4, 4, -1, 1),
+                           text_scale=0.75,
+                           relief=DGG.FLAT,
+                           text_pos=(0, -0.2))
+        btn.setTransparency(True)
+
+        btn = DirectButton(text="Quit",
+                           command=self.quit,
+                           pos=(0.3, 0, -0.2),
+                           parent=self.gameOverScreen,
+                           scale=0.07,
+                           text_font=self.font,
+                           clickSound=self.loader.loadSfx("sounds/UIClick.ogg"),
+                           frameTexture=buttonImages,
+                           frameSize=(-4, 4, -1, 1),
+                           text_scale=0.75,
+                           relief=DGG.FLAT,
+                           text_pos=(0, -0.2))
+        btn.setTransparency(True)
+
+        # making a black backdrop that covers the whole window
+        # here, we keep the parent as "render2d", because always covers the same amount of the window,
+        # regardless of the window’s size and aspect ratio.
+        self.titleMenuBackdrop = DirectFrame(frameColor=(0, 0, 0, 1),
+                                             frameSize=(-1, 1, -1, 1),
+                                             parent=self.render2d)
+
+        self.titleMenu = DirectFrame(frameColor=(1, 1, 1, 0))
+
+        # Our title! "Panda-chan and the Endless Horde"
+        title = DirectLabel(text="Panda-chan",
+                            scale=0.1,
+                            pos=(0, 0, 0.9),
+                            parent=self.titleMenu,
+                            relief=None,
+                            text_font=self.font,
+                            text_fg=(1, 1, 1, 1))
+        title2 = DirectLabel(text="and the",
+                             scale=0.07,
+                             pos=(0, 0, 0.79),
+                             parent=self.titleMenu,
+                             text_font=self.font,
+                             frameColor=(0.5, 0.5, 0.5, 1))
+        title3 = DirectLabel(text="Endless Horde",
+                             scale=0.125,
+                             pos=(0, 0, 0.65),
+                             parent=self.titleMenu,
+                             relief=None,
+                             text_font=self.font,
+                             text_fg=(1, 1, 1, 1))
+
+        btn = DirectButton(text="Start Game",
+                           command=self.startGame,
+                           pos=(0, 0, 0.2),
+                           parent=self.titleMenu,
+                           scale=0.1,
+                           text_font=self.font,
+                           clickSound=self.loader.loadSfx("sounds/UIClick.ogg"),
+                           frameTexture=buttonImages,
+                           frameSize=(-4, 4, -1, 1),
+                           text_scale=0.75,
+                           relief=DGG.FLAT,
+                           text_pos=(0, -0.2))
+        btn.setTransparency(True)
+
+        btn = DirectButton(text="Quit",
+                           command=self.quit,
+                           pos=(0, 0, -0.2),
+                           parent=self.titleMenu,
+                           scale=0.1,
+                           text_font=self.font,
+                           clickSound=self.loader.loadSfx("sounds/UIClick.ogg"),
+                           frameTexture=buttonImages,
+                           frameSize=(-4, 4, -1, 1),
+                           text_scale=0.75,
+                           relief=DGG.FLAT,
+                           text_pos=(0, -0.2))
+        btn.setTransparency(True)
+
+        # setting up the music
+        music = self.loader.loadMusic("music/Defending-the-Princess-Haunted_v002.ogg")
+        music.setLoop(True)
+        music.setVolume(0.075)
+        music.play()
+
 
     def startGame(self):
+        # we want to hide the title menu when we click on the "start Game" button
+        self.titleMenu.hide()
+        self.titleMenuBackdrop.hide()
+        # If we happen to be restarting the
+        # game, hide the game-over screen!
+        self.gameOverScreen.hide()
+
         self.cleanup()
 
         self.player = Player()
@@ -218,10 +375,23 @@ class Game(ShowBase):
             trap.moveInX = True
             self.trapEnemies.append(trap)
 
+
     # updating the state of the game with key press and release
     def updateKeyMap(self, controlName, controlState):
         self.keyMap[controlName] = controlState
         print(controlName, "set to", controlState)
+
+
+    def spawnEnemy(self):
+        if len(self.enemies) < self.maxEnemies:
+            spawnPoint = random.choice(self.spawnPoints)
+
+            newEnemy = WalkingEnemy(spawnPoint)
+
+            self.enemySpawnSound.play()
+
+            self.enemies.append(newEnemy)
+
 
     def stopTrap(self, entry):
         collider = entry.getFromNodePath()
@@ -232,13 +402,11 @@ class Game(ShowBase):
             trap.movementSound.stop()
             trap.stopSound.play()
 
+
     def trapHitsSomething(self, entry):
         collider = entry.getFromNodePath()
         if collider.hasPythonTag("owner"):
             trap = collider.getPythonTag("owner")
-            # playing the impact sound
-            trap.impactSound.play()
-
             # We don't want stationary traps to do damage,
             # so ignore the collision if the "moveDirection" is 0
             if trap.moveDirection == 0:
@@ -253,6 +421,8 @@ class Game(ShowBase):
                         trap.ignorePlayer = True
                 else:
                     obj.alterHealth(-10)
+                # playing the impact sound
+                trap.impactSound.play()
 
 
     # Method that accepts a task and returns a "looping task"....? I don't know how to frame it
@@ -260,7 +430,7 @@ class Game(ShowBase):
         # Get the amount of time since the last update
         dt = globalClock.getDt()
 
-        self.player.update(self.keyMap, dt)
+        # self.player.update(self.keyMap, dt)
 
         # If the player is dead, or we're not
         # playing yet, ignore this logic.
@@ -320,18 +490,19 @@ class Game(ShowBase):
                     if self.spawnInterval > self.minimumSpawnInterval:
                         self.spawnInterval -= 0.1
 
+            else:
+                # If the game-over screen isn't showing...
+                if self.gameOverScreen.isHidden():
+                    # Show the game-over screen, and set the
+                    # text of the "finalScoreLabel" object to
+                    # reflect the player's score.
+                    self.gameOverScreen.show()
+                    self.finalScoreLabel["text"] = "Final score: " + str(self.player.score)
+                    self.finalScoreLabel.setText()
+
 
         return task.cont
 
-    def spawnEnemy(self):
-        if len(self.enemies) < self.maxEnemies:
-            spawnPoint = random.choice(self.spawnPoints)
-
-            newEnemy = WalkingEnemy(spawnPoint)
-
-            self.enemySpawnSound.play()
-
-            self.enemies.append(newEnemy)
 
     def cleanup(self):
         # Call our various cleanup methods,
@@ -353,6 +524,7 @@ class Game(ShowBase):
         if self.player is not None:
             self.player.cleanup()
             self.player = None
+
 
     def quit(self):
         # Clean up, then exit

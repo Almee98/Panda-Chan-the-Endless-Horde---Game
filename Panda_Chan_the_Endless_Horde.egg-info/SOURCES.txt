@@ -1,0 +1,5 @@
+setup.py
+Panda_Chan_the_Endless_Horde.egg-info/PKG-INFO
+Panda_Chan_the_Endless_Horde.egg-info/SOURCES.txt
+Panda_Chan_the_Endless_Horde.egg-info/dependency_links.txt
+Panda_Chan_the_Endless_Horde.egg-info/top_level.txt
